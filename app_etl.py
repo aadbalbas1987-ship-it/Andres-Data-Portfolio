@@ -2,8 +2,11 @@ import pandas as pd
 import pdfplumber
 import re
 import pytesseract
+import cv2
+import numpy as np
+from PIL import Image
 
-# --- MOTORES P1 (IGUALES) ---
+# --- MOTORES P1: PROCESAMIENTO DE LISTAS ---
 def procesar_estandar(file):
     all_rows = []
     try:
@@ -50,12 +53,13 @@ def procesar_excel_csv(file):
         return df.dropna(how='all').dropna(axis=1, how='all')
     except: return None
 
-# --- MOTORES P2 (AUDITORÍA TOTAL) ---
+# --- MOTOR P2: AUDITORÍA CON VISIÓN ARTIFICIAL ---
 
 def extraer_datos_de_texto(texto):
     lineas = texto.split('\n')
     productos = []
-    patron_precio = r'(\d{1,3}(?:\.\d{3})*(?:,\d{2})|\d+(?:\.\d{2})?)'
+    # Patrón mejorado para detectar precios con decimales
+    patron_precio = r'(\d{1,3}(?:\.\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2})?)'
     
     for l in lineas:
         precios = re.findall(patron_precio, l)
@@ -75,8 +79,18 @@ def procesar_pdf_como_foto(file):
         return extraer_datos_de_texto(texto)
     except: return pd.DataFrame([{"Error": "No se pudo leer el PDF"}])
 
-def procesar_foto(imagen):
+def procesar_foto(imagen_pil):
     try:
-        texto = pytesseract.image_to_string(imagen, lang='spa')
+        # 1. Convertir a formato OpenCV
+        img = np.array(imagen_pil.convert('RGB'))
+        # 2. Visión Artificial: Escala de grises
+        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        # 3. Visión Artificial: Umbralización para resaltar texto
+        # (Convierte sombras grises en blanco y letras en negro puro)
+        processed_img = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+        
+        # 4. OCR sobre imagen procesada
+        texto = pytesseract.image_to_string(processed_img, lang='spa', config='--psm 6')
         return extraer_datos_de_texto(texto)
-    except: return pd.DataFrame([{"Error": "No se pudo leer la imagen"}])
+    except Exception as e:
+        return pd.DataFrame([{"Error": f"Fallo en Visión Artificial: {str(e)}"}])

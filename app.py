@@ -1,33 +1,48 @@
 import streamlit as st
-import io
 import pandas as pd
-from app_etl import procesar_lista
+from app_etl import procesar_estandar, procesar_complejo
 
-st.set_page_config(page_title="Portfolio Andrés Balbas", layout="wide")
+st.set_page_config(page_title="Data Portfolio - Andres", layout="wide")
 
-# Navegación
 st.sidebar.title("Navegación")
-seleccion = st.sidebar.radio("Proyectos:", ["Inicio", "Proyecto 1: ETL"])
+proyecto = st.sidebar.radio("Ir a:", ["Inicio", "Proyecto 1: El Limpiador Automático"])
 
-if seleccion == "Inicio":
-    st.title("Data Portfolio - Andrés Balbas")
-    st.write("Bienvenido. Este espacio presenta soluciones técnicas para auditoría y finanzas.")
+if proyecto == "Inicio":
+    st.title("Andrés - Data Portfolio 2026")
+    st.write("Bienvenido a mi portafolio de automatización y auditoría de datos.")
 
-elif seleccion == "Proyecto 1: ETL":
-    st.title("Estandarizador de Listas de Precios")
-    archivo = st.file_uploader("Subir archivo PDF", type=["pdf"])
-    
+elif proyecto == "Proyecto 1: El Limpiador Automático":
+    st.title("🧹 El Limpiador Automático (ETL)")
+    st.info("Este motor detecta automáticamente códigos de producto y limpia descripciones.")
+
+    # MENÚ DE SELECCIÓN DE MOTOR
+    tipo_motor = st.selectbox(
+        "¿Qué tipo de lista vas a procesar?",
+        ["PDF Estándar (Pipas, Arcor, etc.)", "PDF Complejo (Pernod Ricard / DIST)"]
+    )
+
+    archivo = st.file_uploader("Sube tu archivo PDF", type=["pdf"])
+
     if archivo:
-        df_final = procesar_lista(archivo)
-        if df_final is not None:
-            st.dataframe(df_final.head(10))
-            
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                df_final.to_excel(writer, index=False)
-            
+        st.success("Archivo recibido. Procesando...")
+        
+        # LÓGICA DE DERIVACIÓN
+        if tipo_motor == "PDF Estándar (Pipas, Arcor, etc.)":
+            df_resultado = procesar_estandar(archivo)
+        else:
+            df_resultado = procesar_complejo(archivo)
+
+        if df_resultado is not None and not df_resultado.empty:
+            st.write("### Vista previa de los datos procesados:")
+            st.dataframe(df_resultado)
+
+            # Botón de descarga
+            csv = df_resultado.to_csv(index=False).encode('utf-8')
             st.download_button(
-                label="Descargar Excel Estandarizado",
-                data=output.getvalue(),
-                file_name=f"procesado_{archivo.name}.xlsx"
+                label="Descargar Excel (CSV)",
+                data=csv,
+                file_name=f"procesado_{archivo.name}.csv",
+                mime="text/csv",
             )
+        else:
+            st.error("No se detectaron productos. Prueba con el otro motor o verifica el archivo.")

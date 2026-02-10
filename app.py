@@ -57,26 +57,29 @@ elif proyecto == "Proyecto 2: Monitor de Ejecución Presupuestaria":
     st.title("📊 Monitor Presupuestario (Escáner)")
     st.write("Registra tus gastos escaneando comprobantes.")
 
-    # VERSION COMPATIBLE: Quitamos placeholder e index=None
     origen = st.radio(
         "¿Cómo deseas cargar el comprobante?",
-        ["Seleccionar después...", "Subir foto de la galería", "Tomar foto con la cámara"]
+        ["Seleccionar después...", "Subir archivo (Galería/PDF)", "Tomar foto con la cámara"]
     )
 
-    archivo_foto = None
+    archivo_comprobante = None
     
     if origen == "Tomar foto con la cámara":
-        archivo_foto = st.camera_input("Capturar Comprobante")
+        archivo_comprobante = st.camera_input("Capturar Comprobante")
     
-    elif origen == "Subir foto de la galería":
-        archivo_foto = st.file_uploader("Selecciona una imagen", type=["jpg", "jpeg", "png"])
+    elif origen == "Subir archivo (Galería/PDF)":
+        # CORRECCIÓN: Ahora aceptamos PDF también
+        archivo_comprobante = st.file_uploader("Selecciona imagen o PDF", type=["jpg", "jpeg", "png", "pdf"])
 
-    if archivo_foto:
-        # El resto del código sigue igual...
-        img = Image.open(archivo_foto)
-        st.image(img, caption="Imagen cargada", use_container_width=True)
-        
+    if archivo_comprobante:
         if st.button("🚀 Escanear con Motor Sentinel"):
-            with st.spinner("El OCR está leyendo el comprobante..."):
-                datos = procesar_foto(img)
+            with st.spinner("Procesando documento..."):
+                # Si es PDF, usamos una lógica, si es imagen, usamos otra
+                if archivo_comprobante.name.lower().endswith('.pdf'):
+                    from app_etl import procesar_pdf_como_foto
+                    datos = procesar_pdf_como_foto(archivo_comprobante)
+                else:
+                    img = Image.open(archivo_comprobante)
+                    datos = procesar_foto(img)
+                
                 st.table(datos)

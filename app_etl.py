@@ -7,58 +7,62 @@ def procesar_lista(file):
     try:
         with pdfplumber.open(file) as pdf:
             for page in pdf.pages:
-                # Usamos una estrategia de 'espaciado' en lugar de 'líneas'
+                # Mantenemos la estrategia de texto pero bajamos la tolerancia de quiebre
                 table = page.extract_table({
                     "vertical_strategy": "text",
                     "horizontal_strategy": "text",
-                    "snap_tolerance": 4,
+                    "snap_tolerance": 3,
                 })
                 if table:
                     for row in table:
-                        # Limpiamos cada celda de saltos de línea molestos
+                        # Limpieza inicial de saltos de línea
                         clean_row = [str(cell).replace('\n', ' ').strip() if cell else "" for cell in row]
-                        # FILTRO CRÍTICO: Solo guardamos la fila si tiene datos reales
-                        # En Pernod, las filas de productos suelen tener el código en la col 1 o 2
-                        # y un precio o dato numérico más adelante.
-                        if any(clean_row): 
+                        if any(clean_row):
                             all_rows.append(clean_row)
         
-        if not all_rows:
-            return None
+        if not all_rows: return None
 
         df = pd.DataFrame(all_rows)
 
-        # --- REGLAS DE ORO PARA PERNOD / DIST ENERO ---
+        # --- SOLUCIÓN DE COLUMNAS DISPERSAS ---
+        # 1. Unificar Descripción (Columnas 3, 4 y 5)
+        # Usamos fillna('') por seguridad y sumamos los textos
+        if len(df.columns) >= 6:
+            df['SENTINEL_DESC'] = df.iloc[:, 2].astype(str) + " " + df.iloc[:, 3].astype(str) + " " + df.iloc[:, 4].astype(str)
+            # Limpiamos espacios dobles creados por la unión
+            df['SENTINEL_DESC'] = df['SENTINEL_DESC'].str.replace(r'\s+', ' ', regex=True).str.strip()
+
+        # 2. Unificar Precios y Valores (13+14, 16+17, 18+19, 20+21)
+        # Función interna para pegar y quitar espacios locos como "$ 1 6.122" -> "$16122"
+        def soldar_y_limpiar(col_a, col_b):
+            union = df.iloc[:, col_a].astype(str) + df.iloc[:, col_b].astype(str)
+            return union.str.replace(" ", "").str.replace("None", "")
+
+        if len(df.columns) >= 22:
+            df['PRECIO_BASE_BOTELLA'] = soldar_y_limpiar(12, 13)
+            df['IVA_VALOR'] = soldar_y_limpiar(15, 16)
+            df['II_VALOR'] = soldar_y_limpiar(17, 18)
+            df['PRECIO_FINAL'] = soldar_y_limpiar(19, 20)
+
+        # 3. Extraer el Código (SENTINEL_PK)
+        # Buscamos el código de 5 dígitos en las primeras columnas
+        def extraer_pk(row):
+            for cell in row[:4]:
+                match = re.search(r'(\d{5})', str(cell))
+                if match: return match.group(1)
+            return ""
         
-        # 1. Eliminar filas que son encabezados repetidos o basura legal
-        palabras_basura = ['SUB CATEGORÍA', 'IVA (%)', 'Precio Base', 'Código CAJA', 'relevantes del Código']
-        # Filtramos: Si la fila contiene alguna de estas palabras en la primera columna, la borramos
-        df = df[~df[0].str.contains('|'.join(palabras_basura), case=False, na=False)]
+        df['SENTINEL_PK'] = df.apply(extraer_pk, axis=1)
+
+        # --- LIMPIEZA FINAL DEL RUIDO ---
+        # Filtramos solo filas que tengan un código detectado
+        df = df[df['SENTINEL_PK'] != ""].copy()
+
+        # Reordenar: Primero nuestras columnas limpias, luego el desastre original por si las dudas
+        columnas_finales = ['SENTINEL_PK', 'SENTINEL_DESC', 'PRECIO_BASE_BOTELLA', 'PRECIO_FINAL']
+        resto_columnas = [c for c in df.columns if c not in columnas_finales]
         
-        # 2. Identificar el Código (PK) y la Descripción
-        # En este PDF, si la columna 1 tiene un número de 5 dígitos, ese es nuestro código.
-        def extraer_datos_sentinel(row):
-            # Buscamos un número de 4 a 6 dígitos en las primeras celdas
-            for cell in row[:3]:
-                match = re.search(r'(\d{4,6})', str(cell))
-                if match:
-                    # Si encontramos el código, el resto de esa celda o la siguiente es la descripción
-                    codigo = match.group(1)
-                    desc = str(cell).replace(codigo, "").strip()
-                    if len(desc) < 5 and len(row) > 2: # Si la desc quedó corta, probamos la siguiente celda
-                        desc = str(row[2])
-                    return pd.Series([codigo, desc])
-            return pd.Series(["", ""])
-
-        # Aplicamos la lógica para crear las columnas de tu portafolio
-        df[['SENTINEL_PK', 'SENTINEL_DESC']] = df.apply(extraer_datos_sentinel, axis=1)
-
-        # 3. Limpieza final: No queremos filas donde no pudimos encontrar ni código ni descripción útil
-        df = df[(df['SENTINEL_PK'] != "") | (df['SENTINEL_DESC'] != "")]
-
-        # Reordenar para que lo importante esté al principio
-        cols = ['SENTINEL_PK', 'SENTINEL_DESC'] + [c for c in df.columns if c not in ['SENTINEL_PK', 'SENTINEL_DESC']]
-        return df[cols]
+        return df[columnas_finales + resto_columnas]
 
     except Exception as e:
         return None

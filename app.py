@@ -1,17 +1,24 @@
 import streamlit as st
 import pandas as pd
-from app_etl import procesar_estandar, procesar_complejo, procesar_excel_csv
+from PIL import Image # <--- ESTA IMPORTACIÓN FALTA EN TU CÓDIGO
+from app_etl import procesar_estandar, procesar_complejo, procesar_excel_csv, procesar_foto
 
 st.set_page_config(page_title="Andrés Data Portfolio", layout="wide")
 
 st.sidebar.title("Navegación")
-proyecto = st.sidebar.radio("Ir a:", ["Inicio", "Proyecto 1: El Limpiador Automático"])
+# CORRECCIÓN: Agregué la opción a la lista para que aparezca en el menú
+proyecto = st.sidebar.radio("Ir a:", [
+    "Inicio", 
+    "Proyecto 1: El Limpiador Automático", 
+    "Proyecto 2: Monitor de Ejecución Presupuestaria" # <--- ESTO FALTABA
+])
 
 if proyecto == "Inicio":
     st.title("Andrés - Data Portfolio 2026")
     st.write("Bienvenido a mi plataforma de automatización de procesos.")
 
 elif proyecto == "Proyecto 1: El Limpiador Automático":
+    # ... (todo tu código del proyecto 1 queda igual)
     st.title("🧹 El Limpiador Automático (ETL)")
     
     tipo_motor = st.selectbox(
@@ -47,18 +54,22 @@ elif proyecto == "Proyecto 1: El Limpiador Automático":
         else:
             st.error("No pudimos limpiar el archivo. Verifica el formato.")
 
+# --- SECCIÓN PROYECTO 2 ---
 elif proyecto == "Proyecto 2: Monitor de Ejecución Presupuestaria":
     st.title("📊 Monitor Presupuestario (Escáner)")
     st.write("Toma una foto a una factura o ticket para registrar el gasto.")
 
+    # Con esto el navegador te pedirá permiso para usar la cámara
     foto = st.camera_input("Capturar Comprobante")
 
     if foto:
-        img = Image.open(foto)
+        img = Image.open(foto) # Ahora funciona porque importamos Image arriba
         st.image(img, caption="Foto para procesar", use_container_width=True)
         
         if st.button("Escanear Información"):
             with st.spinner("El motor Sentinel está leyendo la imagen..."):
-                datos = procesar_foto(img)
-                st.table(datos)
-
+                try:
+                    datos = procesar_foto(img)
+                    st.table(datos)
+                except Exception as e:
+                    st.error(f"Error del motor OCR: {e}. ¿Subiste el archivo packages.txt?")

@@ -7,59 +7,58 @@ def procesar_lista(file):
     try:
         with pdfplumber.open(file) as pdf:
             for page in pdf.pages:
-                # Usamos una tolerancia más alta para que no separe tanto las palabras
+                # Usamos una estrategia de 'espaciado' en lugar de 'líneas'
                 table = page.extract_table({
                     "vertical_strategy": "text",
                     "horizontal_strategy": "text",
-                    "snap_tolerance": 5, # Aumentamos para que "suelde" palabras cercanas
+                    "snap_tolerance": 4,
                 })
                 if table:
                     for row in table:
+                        # Limpiamos cada celda de saltos de línea molestos
                         clean_row = [str(cell).replace('\n', ' ').strip() if cell else "" for cell in row]
-                        if any(clean_row):
+                        # FILTRO CRÍTICO: Solo guardamos la fila si tiene datos reales
+                        # En Pernod, las filas de productos suelen tener el código en la col 1 o 2
+                        # y un precio o dato numérico más adelante.
+                        if any(clean_row): 
                             all_rows.append(clean_row)
         
-        if not all_rows: return None
+        if not all_rows:
+            return None
 
         df = pd.DataFrame(all_rows)
 
-        # 1. Función para limpiar y pegar números rotos (como "$ 1 6 . 1 2 2")
-        def limpiar_numero_roto(texto):
-            if not texto: return ""
-            # Si detectamos que es un número con espacios locos, quitamos los espacios
-            return re.sub(r'(?<=\d)\s+(?=\d)', '', str(texto))
-
-        # Aplicamos la limpieza a todo el DataFrame de una vez
-        df = df.applymap(limpiar_numero_roto)
-
-        # 2. Identificar el Código y crear la "Super Descripción"
-        def extraer_inteligente(row):
-            codigo = ""
-            # Buscamos el código de 5 dígitos en las primeras 3 celdas
-            for i, cell in enumerate(row[:3]):
-                match = re.search(r'(\d{5})', str(cell))
-                if match:
-                    codigo = match.group(1)
-                    break
-            
-            # La descripción será TODO lo que esté entre la columna 2 y la 8 (donde suelen estar los textos)
-            # Esto evita que si se separa en 3 columnas, perdamos info.
-            descripcion = " ".join([str(c) for c in row[2:10] if len(str(c)) > 2])
-            # Limpiamos si el código se filtró en la descripción
-            if codigo: descripcion = descripcion.replace(codigo, "")
-            
-            return pd.Series([codigo, descripcion.strip()])
-
-        df[['SENTINEL_PK', 'SENTINEL_DESC']] = df.apply(extraer_inteligente, axis=1)
-
-        # 3. Filtrar y Ordenar
-        # Solo nos quedamos con filas que tengan un código de 5 dígitos
-        df = df[df['SENTINEL_PK'].str.len() == 5].copy()
-
-        # Reordenamos: Nuestras 2 columnas clave y TODO lo demás tal cual salió del PDF
-        cols_finales = ['SENTINEL_PK', 'SENTINEL_DESC'] + [c for c in df.columns if c not in ['SENTINEL_PK', 'SENTINEL_DESC']]
+        # --- REGLAS DE ORO PARA PERNOD / DIST ENERO ---
         
-        return df[cols_finales]
+        # 1. Eliminar filas que son encabezados repetidos o basura legal
+        palabras_basura = ['SUB CATEGORÍA', 'IVA (%)', 'Precio Base', 'Código CAJA', 'relevantes del Código']
+        # Filtramos: Si la fila contiene alguna de estas palabras en la primera columna, la borramos
+        df = df[~df[0].str.contains('|'.join(palabras_basura), case=False, na=False)]
+        
+        # 2. Identificar el Código (PK) y la Descripción
+        # En este PDF, si la columna 1 tiene un número de 5 dígitos, ese es nuestro código.
+        def extraer_datos_sentinel(row):
+            # Buscamos un número de 4 a 6 dígitos en las primeras celdas
+            for cell in row[:3]:
+                match = re.search(r'(\d{4,6})', str(cell))
+                if match:
+                    # Si encontramos el código, el resto de esa celda o la siguiente es la descripción
+                    codigo = match.group(1)
+                    desc = str(cell).replace(codigo, "").strip()
+                    if len(desc) < 5 and len(row) > 2: # Si la desc quedó corta, probamos la siguiente celda
+                        desc = str(row[2])
+                    return pd.Series([codigo, desc])
+            return pd.Series(["", ""])
+
+        # Aplicamos la lógica para crear las columnas de tu portafolio
+        df[['SENTINEL_PK', 'SENTINEL_DESC']] = df.apply(extraer_datos_sentinel, axis=1)
+
+        # 3. Limpieza final: No queremos filas donde no pudimos encontrar ni código ni descripción útil
+        df = df[(df['SENTINEL_PK'] != "") | (df['SENTINEL_DESC'] != "")]
+
+        # Reordenar para que lo importante esté al principio
+        cols = ['SENTINEL_PK', 'SENTINEL_DESC'] + [c for c in df.columns if c not in ['SENTINEL_PK', 'SENTINEL_DESC']]
+        return df[cols]
 
     except Exception as e:
         return None

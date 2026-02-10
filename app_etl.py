@@ -101,18 +101,13 @@ def procesar_pdf_como_foto(file):
     except: return pd.DataFrame([{"Error": "No se pudo leer el PDF"}])
 
 def procesar_foto(imagen_pil):
-    try:
-        # 1. Convertir a formato OpenCV
-        img = np.array(imagen_pil.convert('RGB'))
-        # 2. Visión Artificial: Escala de grises
-        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        # 3. Visión Artificial: Umbralización para resaltar texto
-        # (Convierte sombras grises en blanco y letras en negro puro)
-        processed_img = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-        
-        # 4. OCR sobre imagen procesada
-        texto = pytesseract.image_to_string(processed_img, lang='spa', config='--psm 6')
-        return extraer_datos_de_texto(texto)
-    except Exception as e:
-        return pd.DataFrame([{"Error": f"Fallo en Visión Artificial: {str(e)}"}])
+    img = np.array(imagen_pil.convert('RGB'))
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    
+    # Este paso es CLAVE: aumenta el contraste para que el fondo verde desaparezca
+    # y solo queden las letras negras.
+    rect, thresh = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY) 
+    
+    texto = pytesseract.image_to_string(thresh, lang='spa', config='--psm 6')
+    return extraer_datos_de_texto(texto)
 

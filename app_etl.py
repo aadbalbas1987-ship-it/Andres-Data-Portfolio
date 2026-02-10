@@ -55,3 +55,32 @@ def procesar_excel_csv(file):
     except Exception as e:
         print(f"Error en Excel: {e}")
         return None
+import pytesseract
+
+def procesar_foto(imagen):
+    try:
+        # Tesseract lee el texto de la imagen en español
+        texto = pytesseract.image_to_string(imagen, lang='spa')
+        
+        # Buscamos datos clave de forma sencilla por ahora
+        lineas = texto.split('\n')
+        total = "No detectado"
+        fecha = "No detectada"
+
+        for linea in lineas:
+            linea_up = linea.upper()
+            if "TOTAL" in linea_up or "SUMA" in linea_up or "$" in linea:
+                total = linea.strip()
+            if "/" in linea or "-" in linea:
+                # Intenta detectar algo que parezca fecha (ej: 10/02/26)
+                match_fecha = re.search(r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', linea)
+                if match_fecha:
+                    fecha = match_fecha.group(1)
+
+        return [
+            {"Campo": "Fecha", "Valor": fecha},
+            {"Campo": "Monto/Total", "Valor": total},
+            {"Campo": "Texto Extraído", "Valor": texto[:150] + "..."}
+        ]
+    except Exception as e:
+        return [{"Error": f"No se pudo leer la imagen: {str(e)}"}]

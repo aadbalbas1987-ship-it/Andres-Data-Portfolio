@@ -3,3 +3,7 @@ xlsxwriter
 streamlit
 pandas
 openpyxl
+pytesseract
+Pillow
+
+

@@ -1,9 +1,8 @@
-pdfplumber
-xlsxwriter
 streamlit
 pandas
+pdfplumber
 openpyxl
+xlsxwriter
 pytesseract
 Pillow
-
 

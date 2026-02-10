@@ -55,6 +55,7 @@ elif proyecto == "Proyecto 2: Monitor de Ejecución Presupuestaria":
 
     if archivo_comprobante and st.button("🚀 Ejecutar Auditoría Sentinel"):
         with st.spinner("Procesando con el motor seleccionado..."):
+            # Lógica de procesamiento según el método
             if metodo == "Digital (PDF Nativo)":
                 df_res = app_etl.procesar_pdf_digital(archivo_comprobante)
             
@@ -65,19 +66,28 @@ elif proyecto == "Proyecto 2: Monitor de Ejecución Presupuestaria":
                     img = Image.open(archivo_comprobante)
                     df_res = app_etl.procesar_foto_vision(img)
             
-            else: # Cámara
+            else: # Cámara en Vivo
                 img = Image.open(archivo_comprobante)
                 df_res = app_etl.procesar_foto_vision(img)
 
-            if not df_res.empty:
+            # --- SECCIÓN DE RESULTADOS ---
+            if df_res is not None and not df_res.empty:
                 st.write("### Auditoría de Ítems Detectados")
                 st.dataframe(df_res, use_container_width=True)
                 
-                # Cálculo de Total Auditado
+                # CÁLCULO DE TOTAL (Lógica Blindada Master)
                 try:
-                    solo_nums = df_res["Precio"].str.replace('$', '').str.replace('.', '').str.replace(',', '.').astype(float)
-                    st.metric("Total Auditado", f"$ {solo_nums.sum():,.2f}")
-                except:
-                    pass
+                    # 1. Limpiamos caracteres no numéricos excepto comas y puntos
+                    temp_monto = df_res["Precio"].str.replace(r'[^\d,.]', '', regex=True)
+                    # 2. Manejo de decimales: si hay coma, la pasamos a punto para float
+                    temp_monto = temp_monto.str.replace(',', '.')
+                    
+                    # 3. Conversión y suma
+                    solo_nums = pd.to_numeric(temp_monto, errors='coerce').fillna(0)
+                    total_final = solo_nums.sum()
+                    
+                    st.metric("Total Auditado por Sentinel", f"$ {total_final:,.2f}")
+                except Exception as e:
+                    st.warning("No se pudo calcular el total automáticamente. Revise el formato de los precios.")
             else:
-                st.warning("El motor no encontró datos. Pruebe con 'Escáner Pro'.")
+                st.error("El motor no encontró datos legibles. Intente con una imagen más clara o el motor 'Escáner Pro'.")

@@ -57,20 +57,22 @@ elif proyecto == "Proyecto 2: Monitor de Ejecución Presupuestaria":
     st.title("📊 Monitor Presupuestario (Escáner)")
     st.write("Registra tus gastos escaneando comprobantes.")
 
+    # VERSION COMPATIBLE: Quitamos placeholder e index=None
     origen = st.radio(
         "¿Cómo deseas cargar el comprobante?",
-        ["Subir foto de la galería", "Tomar foto con la cámara"],
-        index=None,
-        placeholder="Elige una opción..."
+        ["Seleccionar después...", "Subir foto de la galería", "Tomar foto con la cámara"]
     )
 
     archivo_foto = None
+    
     if origen == "Tomar foto con la cámara":
         archivo_foto = st.camera_input("Capturar Comprobante")
+    
     elif origen == "Subir foto de la galería":
         archivo_foto = st.file_uploader("Selecciona una imagen", type=["jpg", "jpeg", "png"])
 
     if archivo_foto:
+        # El resto del código sigue igual...
         img = Image.open(archivo_foto)
         st.image(img, caption="Imagen cargada", use_container_width=True)
         

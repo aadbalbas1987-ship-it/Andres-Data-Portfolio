@@ -1,8 +1,7 @@
+opencv-python-headless
+numpy
+pytesseract
+Pillow
 streamlit
 pandas
 pdfplumber
-openpyxl
-xlsxwriter
-pytesseract
-Pillow
-

@@ -6,67 +6,52 @@ def procesar_lista(file):
     datos_finales = []
     try:
         with pdfplumber.open(file) as pdf:
+            # Recorremos todas las páginas
             for page in pdf.pages:
-                # Extraemos las palabras con sus coordenadas (x, y)
-                words = page.extract_words(horizontal_ltr=True, y_tolerance=3)
+                texto = page.extract_text()
+                if not texto: continue
                 
-                if not words: continue
-                
-                # Agrupamos palabras que están en la misma línea (misma 'top')
-                lineas = {}
-                for w in words:
-                    y = float(w['top'])
-                    # Agrupamos líneas con una pequeña tolerancia de 2 puntos
-                    encontrado = False
-                    for line_y in lineas.keys():
-                        if abs(y - line_y) < 2:
-                            lineas[line_y].append(w)
-                            encontrado = True
-                            break
-                    if not encontrado:
-                        lineas[y] = [w]
-                
-                # Procesamos cada línea detectada
-                for y in sorted(lineas.keys()):
-                    # Ordenamos palabras de izquierda a derecha
-                    palabras_linea = sorted(lineas[y], key=lambda x: x['x0'])
-                    
-                    # Convertimos a texto simple para buscar el código
-                    texto_linea = " ".join([w['text'] for w in palabras_linea])
-                    
-                    # Buscamos el código de 5 dígitos
-                    match_cod = re.search(r'(\d{5})', texto_linea)
+                for linea in texto.split('\n'):
+                    # 1. Buscamos el código de 5 dígitos (Pernod)
+                    match_cod = re.search(r'(\d{5})', linea)
                     
                     if match_cod:
                         codigo = match_cod.group(1)
                         
-                        # Buscamos los precios (números con coma al final)
-                        precios = [w['text'] for w in palabras_linea if re.search(r'\d+,\d{2}', w['text'])]
+                        # 2. Separamos la línea usando el código como eje
+                        partes = linea.split(codigo)
+                        # Lo que está antes del código suele ser la marca o categoría
+                        prefijo = partes[0].strip()
+                        # Lo que está después es la descripción y los números
+                        resto = partes[1].strip()
                         
-                        # Identificamos la descripción (palabras entre el código y los precios)
-                        desc_parts = []
-                        capturar = False
-                        for w in palabras_linea:
-                            if w['text'] == codigo:
-                                capturar = True
-                                continue
-                            if any(p in w['text'] for p in precios[:1]): # Paramos en el primer precio
-                                break
-                            if capturar:
-                                desc_parts.append(w['text'])
+                        # 3. Identificamos los precios (buscamos el formato 00.000,00)
+                        # Limpiamos el símbolo $ y espacios dobles para no confundir al buscador
+                        resto_limpio = resto.replace('$', '').replace('  ', ' ')
+                        precios = re.findall(r'(\d{1,3}(?:\.\d{3})*(?:,\d{2}))', resto_limpio)
                         
-                        desc_final = " ".join(desc_parts).strip()
+                        # 4. Extraemos la descripción pura
+                        # Es lo que queda entre el código y el primer número de precio
+                        descripcion = resto
+                        if precios:
+                            descripcion = resto.split(precios[0])[0].strip()
                         
-                        if codigo and desc_final:
+                        # Unimos marca + descripción para que no quede cortado
+                        producto_completo = f"{prefijo} {descripcion}".strip()
+                        
+                        # 5. Guardamos en columnas separadas
+                        if len(producto_completo) > 2:
                             datos_finales.append({
-                                "SENTINEL_PK": codigo,
-                                "PRODUCTO": desc_final,
+                                "CODIGO_ART": codigo,
+                                "DESCRIPCION": producto_completo,
                                 "PRECIO_BASE": precios[0] if len(precios) > 0 else "",
                                 "PRECIO_FINAL": precios[-1] if len(precios) > 1 else "",
-                                "ORIGINAL": texto_linea
+                                "LINEA_ORIGINAL": linea # Siempre dejamos el original para auditoría
                             })
 
-        if not datos_finales: return None
+        if not datos_finales:
+            return None
+            
         return pd.DataFrame(datos_finales)
 
     except Exception as e:

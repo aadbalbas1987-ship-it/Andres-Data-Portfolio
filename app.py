@@ -46,3 +46,19 @@ elif proyecto == "Proyecto 1: El Limpiador Automático":
             )
         else:
             st.error("No pudimos limpiar el archivo. Verifica el formato.")
+
+elif proyecto == "Proyecto 2: Monitor de Ejecución Presupuestaria":
+    st.title("📊 Monitor Presupuestario (Escáner)")
+    st.write("Toma una foto a una factura o ticket para registrar el gasto.")
+
+    foto = st.camera_input("Capturar Comprobante")
+
+    if foto:
+        img = Image.open(foto)
+        st.image(img, caption="Foto para procesar", use_container_width=True)
+        
+        if st.button("Escanear Información"):
+            with st.spinner("El motor Sentinel está leyendo la imagen..."):
+                datos = procesar_foto(img)
+                st.table(datos)
+

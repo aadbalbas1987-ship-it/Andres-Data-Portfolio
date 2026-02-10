@@ -57,19 +57,40 @@ def procesar_excel_csv(file):
 
 def extraer_datos_de_texto(texto):
     lineas = texto.split('\n')
-    productos = []
-    # Patrón mejorado para detectar precios con decimales
-    patron_precio = r'(\d{1,3}(?:\.\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2})?)'
+    data_final = []
     
-    for l in lineas:
-        precios = re.findall(patron_precio, l)
-        if precios:
-            precio_f = precios[-1]
-            desc = l.replace(precio_f, "").replace("$", "").strip()
-            if len(desc) > 2:
-                productos.append({"Descripción / Código": desc, "Precio": f"$ {precio_f}"})
-    return pd.DataFrame(productos)
+    # Patrón para precios argentinos (ej: 29.700 o 30.600)
+    patron_precio = r'(\d{1,3}(?:\.\d{3})*)'
 
+    for l in lineas:
+        # Limpiamos caracteres raros pero mantenemos letras y números
+        l_limpia = re.sub(r'[|\\/_]', ' ', l).strip()
+        
+        # Buscamos números que parezcan precios (mínimo 4 dígitos para evitar años o IDs cortos)
+        precios = re.findall(patron_precio, l_limpia)
+        
+        if precios:
+            precio_candidato = precios[-1]
+            # Si el número tiene 5 cifras o más, o es un precio lógico de la lista (ej: > 10.000)
+            if len(precio_candidato.replace('.', '')) >= 4:
+                # Todo lo que NO es el precio es la descripción
+                descripcion = l_limpia.replace(precio_candidato, "").replace("$", "").strip()
+                
+                # Solo agregamos si hay una descripción válida
+                if len(descripcion) > 3:
+                    data_final.append({
+                        "Ítem / Producto": descripcion,
+                        "Precio Detectado": f"$ {precio_candidato}"
+                    })
+
+    df = pd.DataFrame(data_final)
+    
+    # Si el DF está vacío, mandamos un mensaje amigable
+    if df.empty:
+        return pd.DataFrame([{"Aviso": "No se detectaron filas con el formato 'Descripción + Precio'. Intenta una foto más cercana."}])
+        
+    return df
+    
 def procesar_pdf_como_foto(file):
     try:
         texto = ""
@@ -94,3 +115,4 @@ def procesar_foto(imagen_pil):
         return extraer_datos_de_texto(texto)
     except Exception as e:
         return pd.DataFrame([{"Error": f"Fallo en Visión Artificial: {str(e)}"}])
+

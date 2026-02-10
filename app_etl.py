@@ -1,53 +1,53 @@
 import pandas as pd
 import pdfplumber
 import re
-import io
 
 def procesar_lista(file):
     datos_finales = []
     try:
         with pdfplumber.open(file) as pdf:
-            # Iteramos por TODAS las páginas del documento
             for page in pdf.pages:
-                texto_pagina = page.extract_text()
-                if not texto_pagina:
-                    continue
+                texto = page.extract_text()
+                if not texto: continue
                 
-                lineas = texto_pagina.split('\n')
-                
-                for linea in lineas:
-                    # Buscamos el código (PK): 5 dígitos (Pernod) o 4-6 en general
+                for linea in texto.split('\n'):
+                    # 1. Buscamos el código de 5 dígitos (Nuestro ancla)
                     match_cod = re.search(r'(\d{5})', linea)
                     
                     if match_cod:
                         codigo = match_cod.group(1)
                         
-                        # Capturamos todos los precios/números con formato decimal
-                        # Esta regex es más robusta para capturar números con o sin símbolo $
-                        precios = re.findall(r'(\d{1,3}(?:\.\d{3})*(?:,\d{2}))', linea)
+                        # 2. Dividimos la línea en dos: antes del código y después
+                        partes = linea.split(codigo)
+                        prefijo = partes[0].strip() # A veces la marca está antes del código
+                        resto = partes[1].strip()   # Aquí está la descripción y los precios
                         
-                        # Limpiamos la descripción:
-                        # Tomamos lo que está DESPUÉS del código y ANTES de los precios
-                        temp_desc = linea.split(codigo)[-1]
+                        # 3. Limpieza de Precios: 
+                        # Buscamos grupos de números que parecen precios (ej: 16.122,77)
+                        # Quitamos los "$" para que no molesten
+                        linea_sin_dinero = resto.replace('$', '').strip()
+                        precios = re.findall(r'(\d{1,3}(?:\.\d{3})*(?:,\d{2}))', linea_sin_dinero)
+                        
+                        # 4. La descripción es lo que queda entre el código y los números
+                        descripcion = resto
                         if precios:
-                            temp_desc = temp_desc.split(precios[0])[0]
+                            descripcion = resto.split(precios[0])[0].strip()
                         
-                        desc_limpia = temp_desc.strip()
+                        # Unimos el prefijo (si existe) con la descripción
+                        desc_completa = f"{prefijo} {descripcion}".strip()
                         
-                        # Solo ignoramos líneas que sean puramente legales (muy largas)
-                        if len(linea) < 300: 
-                            datos_finales.append({
-                                "SENTINEL_PK": codigo,
-                                "SENTINEL_DESC": desc_limpia,
-                                "PRECIO_BASE": precios[0] if len(precios) > 0 else "",
-                                "IVA_VALOR": precios[2] if len(precios) > 2 else "",
-                                "PRECIO_FINAL": precios[-1] if len(precios) > 1 else "",
-                                "LINEA_COMPLETA": linea
-                            })
+                        # 5. Guardamos TODO lo que encontramos en la línea
+                        datos_finales.append({
+                            "CODIGO": codigo,
+                            "PRODUCTO": desc_completa,
+                            "PRECIO_1": precios[0] if len(precios) > 0 else "",
+                            "PRECIO_2": precios[1] if len(precios) > 1 else "",
+                            "PRECIO_3": precios[2] if len(precios) > 2 else "",
+                            "PRECIO_FINAL": precios[-1] if len(precios) > 1 else "",
+                            "DETALLE_ORIGINAL": linea
+                        })
         
-        if not datos_finales:
-            return None
-            
+        if not datos_finales: return None
         return pd.DataFrame(datos_finales)
 
     except Exception as e:

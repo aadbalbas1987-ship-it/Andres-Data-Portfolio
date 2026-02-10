@@ -84,3 +84,32 @@ def procesar_foto(imagen):
         ]
     except Exception as e:
         return [{"Error": f"No se pudo leer la imagen: {str(e)}"}]
+
+# --- MOTOR 5: PROCESAR PDF COMO COMPROBANTE DE GASTO ---
+def procesar_pdf_como_foto(file):
+    try:
+        texto_completo = ""
+        with pdfplumber.open(file) as pdf:
+            for page in pdf.pages:
+                texto_completo += page.extract_text() + "\n"
+        
+        lineas = texto_completo.split('\n')
+        total, fecha = "No detectado", "No detectada"
+        
+        for l in lineas:
+            l_up = l.upper()
+            if "TOTAL" in l_up or "$" in l or "NETO" in l_up:
+                total = l.strip()
+            match_f = re.search(r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', l)
+            if match_f:
+                fecha = match_f.group(1)
+                
+        return [
+            {"Campo": "Fecha", "Valor": fecha}, 
+            {"Campo": "Monto Detectado", "Valor": total}, 
+            {"Campo": "Origen", "Valor": "PDF Escaneado"},
+            {"Campo": "Texto Extraído", "Valor": texto_completo[:150] + "..."}
+        ]
+    except Exception as e:
+        return [{"Error": f"Fallo al leer PDF: {str(e)}"}]
+

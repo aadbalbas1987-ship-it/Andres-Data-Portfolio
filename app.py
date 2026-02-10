@@ -1,12 +1,12 @@
 import streamlit as st
 import pandas as pd
 from PIL import Image
-from app_etl import procesar_estandar, procesar_complejo, procesar_excel_csv, procesar_foto
+from app_etl import procesar_estandar, procesar_complejo, procesar_excel_csv, procesar_foto, procesar_pdf_como_foto
 
 st.set_page_config(page_title="Andrés Data Portfolio", layout="wide")
 
+# --- NAVEGACIÓN ---
 st.sidebar.title("Navegación")
-# Aquí definimos las opciones del menú
 proyecto = st.sidebar.radio("Ir a:", [
     "Inicio", 
     "Proyecto 1: El Limpiador Automático", 
@@ -15,71 +15,53 @@ proyecto = st.sidebar.radio("Ir a:", [
 
 if proyecto == "Inicio":
     st.title("Andrés - Data Portfolio 2026")
-    st.write("Bienvenido a mi plataforma de automatización de procesos y auditoría forense.")
-    st.info("Selecciona un proyecto en el menú lateral para comenzar.")
+    st.write("### Plataforma de Automatización y Auditoría Forense")
+    st.info("Utilice el menú lateral para navegar entre las herramientas de ETL y Monitoreo.")
 
+# --- PROYECTO 1 ---
 elif proyecto == "Proyecto 1: El Limpiador Automático":
     st.title("🧹 El Limpiador Automático (ETL)")
+    tipo_motor = st.selectbox("Tipo de lista:", ["PDF Estándar", "PDF Complejo", "Archivo Excel o CSV"])
     
-    tipo_motor = st.selectbox(
-        "¿Qué tipo de lista vas a procesar?",
-        ["PDF Estándar (Pipas, Arcor, etc.)", 
-         "PDF Complejo (Pernod Ricard / DIST)", 
-         "Archivo Excel o CSV"]
-    )
-
     formatos = ["pdf"] if "PDF" in tipo_motor else ["xlsx", "csv"]
-    archivo = st.file_uploader(f"Sube tu archivo ({', '.join(formatos)})", type=formatos)
+    archivo = st.file_uploader(f"Subir archivo ({', '.join(formatos)})", type=formatos)
 
     if archivo:
-        if tipo_motor == "PDF Estándar (Pipas, Arcor, etc.)":
-            df_resultado = procesar_estandar(archivo)
-        elif tipo_motor == "PDF Complejo (Pernod Ricard / DIST)":
-            df_resultado = procesar_complejo(archivo)
-        else:
-            df_resultado = procesar_excel_csv(archivo)
+        if tipo_motor == "PDF Estándar": df_res = procesar_estandar(archivo)
+        elif tipo_motor == "PDF Complejo": df_res = procesar_complejo(archivo)
+        else: df_res = procesar_excel_csv(archivo)
 
-        if df_resultado is not None and not df_resultado.empty:
-            st.success("¡Limpieza automática completada!")
-            st.dataframe(df_resultado)
-            
-            csv = df_resultado.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Descargar Resultado Limpio",
-                data=csv,
-                file_name=f"sentinel_{archivo.name}.csv",
-                mime="text/csv",
-            )
+        if df_res is not None and not df_res.empty:
+            st.success("Limpieza completada.")
+            st.dataframe(df_res, use_container_width=True)
+            st.download_button("Descargar CSV", df_res.to_csv(index=False).encode('utf-8'), "limpio.csv", "text/csv")
         else:
-            st.error("No se detectaron datos. Verifica el motor seleccionado.")
+            st.error("No se detectaron datos.")
 
+# --- PROYECTO 2 ---
 elif proyecto == "Proyecto 2: Monitor de Ejecución Presupuestaria":
     st.title("📊 Monitor Presupuestario (Escáner)")
-    st.write("Registra tus gastos escaneando comprobantes.")
+    st.write("Extraiga códigos, descripciones y precios automáticamente.")
 
-    origen = st.radio(
-        "¿Cómo deseas cargar el comprobante?",
-        ["Seleccionar después...", "Subir archivo (Galería/PDF)", "Tomar foto con la cámara"]
-    )
+    origen = st.radio("Seleccione origen:", ["Subir archivo (Galería/PDF)", "Tomar foto con la cámara"], index=None)
 
     archivo_comprobante = None
-    
     if origen == "Tomar foto con la cámara":
-        archivo_comprobante = st.camera_input("Capturar Comprobante")
-    
+        archivo_comprobante = st.camera_input("Capturar")
     elif origen == "Subir archivo (Galería/PDF)":
-        # CORRECCIÓN: Ahora aceptamos PDF también
-        archivo_comprobante = st.file_uploader("Selecciona imagen o PDF", type=["jpg", "jpeg", "png", "pdf"])
+        archivo_comprobante = st.file_uploader("Imagen o PDF", type=["jpg", "jpeg", "png", "pdf"])
 
     if archivo_comprobante:
         if st.button("🚀 Escanear con Motor Sentinel"):
-            with st.spinner("Procesando documento..."):
-                # Si es PDF, usamos una lógica, si es imagen, usamos otra
+            with st.spinner("Mapeando información del documento..."):
                 if archivo_comprobante.name.lower().endswith('.pdf'):
-                    from app_etl import procesar_pdf_como_foto
-                    datos = procesar_pdf_como_foto(archivo_comprobante)
+                    df_final = procesar_pdf_como_foto(archivo_comprobante)
                 else:
                     img = Image.open(archivo_comprobante)
-                    datos = procesar_foto(img)
+                    df_final = procesar_foto(img)
                 
-                st.table(datos)
+                st.write("### Detalle Detectado")
+                st.dataframe(df_final, use_container_width=True)
+                
+                if not df_final.empty:
+                    st.download_button("Exportar Auditoría a Excel", df_final.to_csv(index=False).encode('utf-8'), "auditoria_gasto.csv", "text/csv")

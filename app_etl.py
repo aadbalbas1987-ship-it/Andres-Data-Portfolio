@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-# --- MOTORES P1: PROCESAMIENTO DE LISTAS ---
+# --- MOTORES PROYECTO 1 ---
 def procesar_estandar(file):
     all_rows = []
     try:
@@ -53,44 +53,28 @@ def procesar_excel_csv(file):
         return df.dropna(how='all').dropna(axis=1, how='all')
     except: return None
 
-# --- MOTOR P2: AUDITORÍA CON VISIÓN ARTIFICIAL ---
+# --- MOTORES PROYECTO 2 (RE-CALIBRADO) ---
 
 def extraer_datos_de_texto(texto):
     lineas = texto.split('\n')
-    data_final = []
-    
-    # Patrón para precios argentinos (ej: 29.700 o 30.600)
+    productos = []
+    # Buscamos números de 4 cifras o más (precios tipo 29.700)
     patron_precio = r'(\d{1,3}(?:\.\d{3})*)'
-
+    
     for l in lineas:
-        # Limpiamos caracteres raros pero mantenemos letras y números
         l_limpia = re.sub(r'[|\\/_]', ' ', l).strip()
-        
-        # Buscamos números que parezcan precios (mínimo 4 dígitos para evitar años o IDs cortos)
         precios = re.findall(patron_precio, l_limpia)
         
         if precios:
-            precio_candidato = precios[-1]
-            # Si el número tiene 5 cifras o más, o es un precio lógico de la lista (ej: > 10.000)
-            if len(precio_candidato.replace('.', '')) >= 4:
-                # Todo lo que NO es el precio es la descripción
-                descripcion = l_limpia.replace(precio_candidato, "").replace("$", "").strip()
-                
-                # Solo agregamos si hay una descripción válida
-                if len(descripcion) > 3:
-                    data_final.append({
-                        "Ítem / Producto": descripcion,
-                        "Precio Detectado": f"$ {precio_candidato}"
-                    })
+            precio_f = precios[-1]
+            # Solo si el número parece un precio (ej: 29.700 tiene al menos 5 caracteres con el punto)
+            if len(precio_f) >= 4:
+                desc = l_limpia.replace(precio_f, "").replace("$", "").strip()
+                if len(desc) > 2:
+                    productos.append({"Descripción / Pack": desc, "Precio": f"$ {precio_f}"})
+    
+    return pd.DataFrame(productos)
 
-    df = pd.DataFrame(data_final)
-    
-    # Si el DF está vacío, mandamos un mensaje amigable
-    if df.empty:
-        return pd.DataFrame([{"Aviso": "No se detectaron filas con el formato 'Descripción + Precio'. Intenta una foto más cercana."}])
-        
-    return df
-    
 def procesar_pdf_como_foto(file):
     try:
         texto = ""
@@ -98,16 +82,23 @@ def procesar_pdf_como_foto(file):
             for page in pdf.pages:
                 texto += (page.extract_text() or "") + "\n"
         return extraer_datos_de_texto(texto)
-    except: return pd.DataFrame([{"Error": "No se pudo leer el PDF"}])
+    except: return pd.DataFrame()
 
 def procesar_foto(imagen_pil):
-    img = np.array(imagen_pil.convert('RGB'))
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    
-    # Este paso es CLAVE: aumenta el contraste para que el fondo verde desaparezca
-    # y solo queden las letras negras.
-    rect, thresh = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY) 
-    
-    texto = pytesseract.image_to_string(thresh, lang='spa', config='--psm 6')
-    return extraer_datos_de_texto(texto)
-
+    try:
+        # 1. Convertir a OpenCV
+        img = np.array(imagen_pil.convert('RGB'))
+        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        
+        # 2. FILTRO ADAPTATIVO (La clave para que vuelva a ver)
+        # En lugar de un corte fijo, analiza el brillo por bloques
+        processed_img = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                              cv2.THRESH_BINARY, 11, 2)
+        
+        # 3. OCR con configuración balanceada
+        texto = pytesseract.image_to_string(processed_img, lang='spa', config='--psm 6')
+        
+        df = extraer_datos_de_texto(texto)
+        return df
+    except Exception as e:
+        return pd.DataFrame([{"Error": str(e)}])

@@ -1,75 +1,35 @@
-import streamlit as st
-import pandas as pd
-from PIL import Image # <--- ESTA IMPORTACIÓN FALTA EN TU CÓDIGO
-from app_etl import procesar_estandar, procesar_complejo, procesar_excel_csv, procesar_foto
-
-st.set_page_config(page_title="Andrés Data Portfolio", layout="wide")
-
-st.sidebar.title("Navegación")
-# CORRECCIÓN: Agregué la opción a la lista para que aparezca en el menú
-proyecto = st.sidebar.radio("Ir a:", [
-    "Inicio", 
-    "Proyecto 1: El Limpiador Automático", 
-    "Proyecto 2: Monitor de Ejecución Presupuestaria" # <--- ESTO FALTABA
-])
-
-if proyecto == "Inicio":
-    st.title("Andrés - Data Portfolio 2026")
-    st.write("Bienvenido a mi plataforma de automatización de procesos.")
-
-elif proyecto == "Proyecto 1: El Limpiador Automático":
-    # ... (todo tu código del proyecto 1 queda igual)
-    st.title("🧹 El Limpiador Automático (ETL)")
-    
-    tipo_motor = st.selectbox(
-        "¿Qué tipo de lista vas a procesar?",
-        ["PDF Estándar (Pipas, Arcor, etc.)", 
-         "PDF Complejo (Pernod Ricard / DIST)", 
-         "Archivo Excel o CSV"]
-    )
-
-    formatos = ["pdf"] if "PDF" in tipo_motor else ["xlsx", "csv"]
-    archivo = st.file_uploader(f"Sube tu archivo ({', '.join(formatos)})", type=formatos)
-
-    if archivo:
-        if tipo_motor == "PDF Estándar (Pipas, Arcor, etc.)":
-            df_resultado = procesar_estandar(archivo)
-        elif tipo_motor == "PDF Complejo (Pernod Ricard / DIST)":
-            df_resultado = procesar_complejo(archivo)
-        else:
-            df_resultado = procesar_excel_csv(archivo)
-
-        if df_resultado is not None and not df_resultado.empty:
-            st.success("¡Limpieza automática completada!")
-            st.write("### Vista previa de los datos limpios:")
-            st.dataframe(df_resultado)
-
-            csv = df_resultado.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Descargar Excel Limpio",
-                data=csv,
-                file_name=f"SENTINEL_limpio_{archivo.name}.csv",
-                mime="text/csv",
-            )
-        else:
-            st.error("No pudimos limpiar el archivo. Verifica el formato.")
-
 # --- SECCIÓN PROYECTO 2 ---
 elif proyecto == "Proyecto 2: Monitor de Ejecución Presupuestaria":
     st.title("📊 Monitor Presupuestario (Escáner)")
-    st.write("Toma una foto a una factura o ticket para registrar el gasto.")
+    st.write("Registra un gasto escaneando un comprobante.")
 
-    # Con esto el navegador te pedirá permiso para usar la cámara
-    foto = st.camera_input("Capturar Comprobante")
+    # 1. Preguntamos cómo quiere subir la info
+    origen = st.radio(
+        "¿Cómo deseas cargar el comprobante?",
+        ["Subir foto de la galería", "Tomar foto con la cámara"],
+        index=None, # Para que no entre directo a ninguna y espere la elección
+        placeholder="Selecciona una opción..."
+    )
 
-    if foto:
-        img = Image.open(foto) # Ahora funciona porque importamos Image arriba
-        st.image(img, caption="Foto para procesar", use_container_width=True)
+    archivo_foto = None
+
+    # 2. Mostramos el componente según la elección
+    if origen == "Tomar foto con la cámara":
+        archivo_foto = st.camera_input("Capturar Comprobante")
+    
+    elif origen == "Subir foto de la galería":
+        archivo_foto = st.file_uploader("Selecciona una imagen del ticket", type=["jpg", "jpeg", "png"])
+
+    # 3. Procesamiento común para ambos
+    if archivo_foto:
+        img = Image.open(archivo_foto)
+        st.image(img, caption="Imagen cargada", use_container_width=True)
         
-        if st.button("Escanear Información"):
-            with st.spinner("El motor Sentinel está leyendo la imagen..."):
+        if st.button("🚀 Escanear con Motor Sentinel"):
+            with st.spinner("Analizando texto y montos..."):
                 try:
+                    # Usamos la misma función para ambos casos
                     datos = procesar_foto(img)
                     st.table(datos)
                 except Exception as e:
-                    st.error(f"Error del motor OCR: {e}. ¿Subiste el archivo packages.txt?")
+                    st.error(f"Error al leer la imagen: {e}")

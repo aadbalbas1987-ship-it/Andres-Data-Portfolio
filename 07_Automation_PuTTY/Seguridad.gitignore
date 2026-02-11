@@ -1,1 +1,4 @@
-
+input/*.xlsx
+procesados/*.xlsx
+rechazados/*.xlsx
+__pycache__/

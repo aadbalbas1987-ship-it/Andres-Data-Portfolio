@@ -1,4 +1,5 @@
-input/*.xlsx
-procesados/*.xlsx
-rechazados/*.xlsx
+**/input/*.xlsx
+**/procesados/*.xlsx
+**/rechazados/*.xlsx
+**/logs/*.txt
 __pycache__/

@@ -6,7 +6,7 @@ import shutil
 import pygetwindow as gw
 import keyboard
 import sys
-import ctypes # Librería para interactuar con el hardware del teclado
+import ctypes
 
 # --- RUTAS ---
 BASE_DIR = r"C:\Users\HP\Desktop\Proyecto\Andres-Data-Portfolio\07_Automation_PuTTY"
@@ -18,7 +18,6 @@ pyautogui.FAILSAFE = True
 
 def forzar_caps_off():
     """Detecta si Bloque Mayús está activo y lo apaga"""
-    # 0x14 es el código de Caps Lock. El bit de la derecha indica si está encendido.
     hllDll = ctypes.WinDLL("User32.dll")
     if hllDll.GetKeyState(0x14) & 0x0001:
         print("[⚠️] Detectado Bloque Mayús encendido. Apagándolo automáticamente...")
@@ -45,10 +44,10 @@ def enfocar_putty():
 def ejecutar_carga(df, p_c1, p_c2, p_c3):
     if not enfocar_putty(): return False
     
-    # ASEGURAR MAYÚSCULAS APAGADAS ANTES DE EMPEZAR
+    # ASEGURAR MAYÚSCULAS APAGADAS
     forzar_caps_off()
 
-    pedido_str = str(p_c1).strip()
+    pedido_str = str(int(p_c1)).strip()
     obs_str = str(p_c2).strip()
     comando_im = str(p_c3).strip().upper() 
 
@@ -65,10 +64,9 @@ def ejecutar_carga(df, p_c1, p_c2, p_c3):
     pyautogui.write(obs_str); pyautogui.press('enter'); time.sleep(0.5)
     pyautogui.press('enter'); time.sleep(1.8)
 
-    # 4. PASO CRÍTICO: IM (Forzamos escritura lenta y explícita)
+    # 4. PASO CRÍTICO: IM
     check_abort()
     print(f">>> Enviando comando: {comando_im}")
-    # Escribimos usando SHIFT para asegurar que sea Mayúscula sin importar el Caps Lock
     for letra in comando_im:
         pyautogui.keyDown('shift')
         pyautogui.press(letra.lower())
@@ -80,7 +78,7 @@ def ejecutar_carga(df, p_c1, p_c2, p_c3):
     # 5. RE-VALIDACIÓN C1
     pyautogui.write(pedido_str); pyautogui.press('enter'); time.sleep(4.5)
 
-    # 6. GRILLA
+    # 6. GRILLA (UNIDADES)
     for i, fila in df.iterrows():
         check_abort()
         if pd.isna(fila[0]): break
@@ -98,23 +96,39 @@ def ejecutar_carga(df, p_c1, p_c2, p_c3):
     return True
 
 def main():
-    for p in [PATH_INPUT, PATH_DONE, PATH_REJECTED]: os.makedirs(p, exist_ok=True)
-    while True:
-        archivos = [f for f in os.listdir(PATH_INPUT) if f.endswith('.xlsx')]
-        if not archivos:
-            print("[-] Esperando archivos...")
-            time.sleep(10); check_abort(); continue
+    # Asegurar que las carpetas existan
+    for p in [PATH_INPUT, PATH_DONE, PATH_REJECTED]: 
+        os.makedirs(p, exist_ok=True)
+    
+    # Obtener lista de archivos excel en la carpeta input
+    archivos = [f for f in os.listdir(PATH_INPUT) if f.endswith('.xlsx')]
+    
+    if not archivos:
+        print("[!] No se encontraron archivos para procesar. El robot se cerrará.")
+        return
 
-        for archivo in archivos:
-            check_abort()
-            ruta = os.path.join(PATH_INPUT, archivo)
-            try:
-                df = pd.read_excel(ruta, header=None)
-                if ejecutar_carga(df, df.iloc[0,2], df.iloc[1,2], df.iloc[2,2]):
-                    shutil.move(ruta, os.path.join(PATH_DONE, f"OK_{archivo}"))
-                    time.sleep(2)
-            except Exception as e:
-                shutil.move(ruta, os.path.join(PATH_REJECTED, f"ERR_{archivo}"))
+    print(f"[*] Iniciando procesamiento de {len(archivos)} archivo(s)...")
+
+    for archivo in archivos:
+        check_abort()
+        ruta = os.path.join(PATH_INPUT, archivo)
+        print(f"\n>>> Trabajando en: {archivo}")
+        
+        try:
+            # Leemos el excel
+            df = pd.read_excel(ruta, header=None)
+            
+            # Ejecutamos la carga usando los datos de la columna C (C1, C2, C3)
+            if ejecutar_carga(df, df.iloc[0,2], df.iloc[1,2], df.iloc[2,2]):
+                shutil.move(ruta, os.path.join(PATH_DONE, f"OK_{archivo}"))
+                print(f"[✅] Finalizado con éxito: {archivo}")
+                time.sleep(2)
+                
+        except Exception as e:
+            print(f"[❌] Error procesando {archivo}: {e}")
+            shutil.move(ruta, os.path.join(PATH_REJECTED, f"ERR_{archivo}"))
+
+    print("\n[🏁] PROCESO TERMINADO. No quedan más archivos. Hasta pronto.")
 
 if __name__ == "__main__":
     main()

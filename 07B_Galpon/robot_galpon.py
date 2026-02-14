@@ -4,7 +4,7 @@ import time
 import os
 import shutil
 import pygetwindow as gw
-import keyboard  # Necesario para detectar la tecla física
+import keyboard
 import sys
 import ctypes
 
@@ -14,19 +14,17 @@ PATH_INPUT = os.path.join(BASE_DIR, "input")
 PATH_DONE = os.path.join(BASE_DIR, "procesados")
 PATH_REJECTED = os.path.join(BASE_DIR, "rechazados")
 
-pyautogui.FAILSAFE = True  # Si llevas el mouse a una esquina, también frena
+pyautogui.FAILSAFE = True 
 
 def forzar_caps_off():
-    """Apaga el Bloque Mayús para asegurar que la 'b' salga minúscula"""
     hllDll = ctypes.WinDLL("User32.dll")
     if hllDll.GetKeyState(0x14) & 0x0001:
         pyautogui.press('capslock')
-        time.sleep(0.5)
+        time.sleep(0.2) # Tiempo reducido
 
 def check_abort():
-    """EL BOTÓN DE EMERGENCIA: Si presionas ESC, el programa muere inmediatamente"""
     if keyboard.is_pressed('esc'):
-        print("\n[🚨] EMERGENCIA: ABORTO MANUAL DETECTADO POR TECLA 'ESC'.")
+        print("\n[🚨] ABORTO MANUAL.")
         sys.exit()
 
 def enfocar_putty():
@@ -49,62 +47,66 @@ def ejecutar_carga_galpon(df, p_c1, p_c2, p_c3):
     c2 = str(p_c2).strip().upper()
     c3 = str(p_c3).strip().upper()
 
-    # NAVEGACIÓN
+    # 1. NAVEGACIÓN (Tiempos reducidos)
     check_abort()
-    pyautogui.write('2'); time.sleep(0.5)
-    pyautogui.write('2'); pyautogui.press('enter'); time.sleep(1.5)
+    pyautogui.write('2'); time.sleep(0.3)
+    pyautogui.write('2'); pyautogui.press('enter'); time.sleep(0.5)
 
-    # CABECERA
+    # 2. CABECERA
     check_abort()
-    pyautogui.write(c1); pyautogui.press('enter'); time.sleep(0.5)
-    pyautogui.press('enter'); time.sleep(1.2)
+    pyautogui.write(c1); pyautogui.press('enter'); time.sleep(0.3)
+    pyautogui.press('enter'); time.sleep(0.5)
     
     # C2 MAYÚSCULAS
-    check_abort()
     for letra in c2:
         pyautogui.keyDown('shift'); pyautogui.press(letra.lower()); pyautogui.keyUp('shift')
-    pyautogui.press('enter'); time.sleep(0.5); pyautogui.press('enter'); time.sleep(1.2)
+    pyautogui.press('enter'); time.sleep(0.3); pyautogui.press('enter'); time.sleep(0.5)
 
-    # C3 (IM) MAYÚSCULAS
-    check_abort()
+    # C3 MAYÚSCULAS
     for letra in c3:
         pyautogui.keyDown('shift'); pyautogui.press(letra.lower()); pyautogui.keyUp('shift')
-    pyautogui.press('enter'); time.sleep(2.5)
+    pyautogui.press('enter'); time.sleep(1.5) # Reducido de 2.5
 
-    # RE-VALIDACIÓN C1
-    check_abort()
-    pyautogui.write(c1); pyautogui.press('enter'); time.sleep(4.0)
+    # 3. RE-VALIDACIÓN C1
+    pyautogui.write(c1); pyautogui.press('enter'); time.sleep(3.0) # Reducido de 4.0
 
-    # GRILLA: SKU -> 4 ENTER -> b -> CANT -> ENTER
-    print(">>> Cargando grilla. Mantené ESC para frenar.")
+    # 4. GRILLA
     for i, fila in df.iterrows():
-        check_abort() # Revisa en cada SKU
+        check_abort()
         if pd.isna(fila[0]): break
         
         sku = str(int(fila[0]))
         cant = str(int(fila[1]))
 
         pyautogui.write(sku)
-        
         for _ in range(4):
-            check_abort() # Revisa entre cada Enter
             pyautogui.press('enter')
-            time.sleep(0.2)
+            time.sleep(0.1) # Tiempos de grilla mínimos
         
         pyautogui.write('b')
-        time.sleep(0.3)
+        time.sleep(0.15)
         pyautogui.write(cant)
         pyautogui.press('enter')
-        time.sleep(0.8)
+        time.sleep(0.3) # Mucho más rápido entre artículos
 
+    # 5. FINALIZACIÓN Y RETORNO AL MENÚ (Secuencia solicitada)
     check_abort()
-    pyautogui.press('f5')
+    pyautogui.press('f5'); time.sleep(1.0)
+    pyautogui.hotkey('ctrl', 'l'); time.sleep(0.5)
+    
+    # Volver al inicio: End, Enter, End
+    print("[*] Volviendo al menú principal...")
+    pyautogui.press('end'); time.sleep(0.3)
+    pyautogui.press('enter'); time.sleep(0.3)
+    pyautogui.press('end'); time.sleep(1.0) # Espera final para el próximo archivo
+    
     return True
 
 def main():
-    for p in [PATH_INPUT, PATH_DONE, PATH_REJECTED]: os.makedirs(p, exist_ok=True)
-    print(f"[*] Robot Galpón ACTIVO. Escuchando en: {PATH_INPUT}")
-    print("[!] Recordá: ESC para detener el proceso en cualquier momento.")
+    for p in [PATH_INPUT, PATH_DONE, PATH_REJECTED]: 
+        os.makedirs(p, exist_ok=True)
+        
+    print(f"[*] Robot Galpón ULTRA-FAST activo.")
     
     while True:
         check_abort()
